@@ -8,6 +8,13 @@
           \___||__|  |__|__||_____|  \_/\_/    |__|  \____||__|__|
 
                        Smart Programmable Next-Level Wearable Tech
+
+       _______ ______ _______ _____   ________ _______ ______ _______ 
+      |     __|   __ \    |  |     |_|  |  |  |_     _|      |   |   |
+      |__     |    __/       |       |  |  |  | |   | |   ---|       |
+      |_______|___|  |__|____|_______|________| |___| |______|___|___|
+                                                              
+                       
 */
 
 // Without any power saving = 6.9mA
@@ -17,11 +24,12 @@
 // https://github.com/Uberi/Arduino-HardwareBLESerial/blob/master/README.md
 #include <HardwareBLESerial.h>
 #include <SPI.h>
+#include "fonts.h"
 #include "screen.h"
+#include "text.h"
 #include "notifications.h"
 #include "realtime.h"
 #include "gui.h"
-#include "fonts.h"
 #include "buttonhandling.h"
 
 #define DEVICE_NAME "Bangle.js" // Pretend to be a different smartwatch so we can use GadgetBridge
@@ -40,6 +48,7 @@ int batList[128];
 int batNum = 0;
 int charge_frame = 0;
 
+
 #define RUMBLE_PIN 2
 int fCount=0;
 
@@ -48,73 +57,6 @@ bool gotTime = false;
 
 int notificationTimeout=0;
 
-int stringLength(const char* text){
-  int x=0;
-  uint8_t numChars = strlen(text);
-  for (uint8_t t = 0; t < numChars; t++) {
-    uint8_t character = text[t] - 32;
-    x+=(pgm_read_byte(&font01_widths[character])*gScale);
-  }
-  return x;
-}
-
-void print(int x, int y, const char* text){
-  int x1 = x;
-  uint8_t numChars = strlen(text);
-  for (uint8_t t = 0; t < numChars; t++) {
-    uint8_t character = text[t] - 32;
-    drawSprite(&font01[character][0], x1, y);
-    x1+=(pgm_read_byte(&font01_widths[character])*gScale);
-    if(x1 >= 144){
-      x1=x;
-      y=y+6; // line height
-    }
-  }
-}
-
-
-char* getSubstring(char* line, char* src) {
-  // Find the word "src:" in the line
-  char* wordStart = strstr(line, src);
-
-  if (wordStart != NULL) {
-    // Find the next occurrence of "
-    char* startQuote = strchr(wordStart, '"');
-  
-    if (startQuote != NULL) {
-      // Calculate the character number of the start quote
-      int quoteStartIndex = startQuote - line;
-  
-      // Find the next occurrence of " after the first
-      char* endQuote = strchr(startQuote + 1, '"');
-  
-      if (endQuote != NULL) {
-        // Calculate the character number of the end quote
-        int quoteEndIndex = endQuote - line;
-  
-        // Calculate the length of the substring
-        int substringLength = quoteEndIndex - quoteStartIndex - 1; // Exclude " from the length
-  
-        // Create a new char array to store the substring
-        char* substring = (char*) malloc(substringLength + 1); // +1 for the null terminator
-  
-        // Copy the substring into the new char array
-        strncpy(substring, startQuote + 1, substringLength);
-        substring[substringLength] = '\0'; // Add null terminator
-  
-        return substring;
-      } else {
-        Serial.println("No ending quote was found for 'src:'.");
-      }
-    } else {
-      Serial.println("No starting quote was found for 'src:'.");
-    }
-  } else {
-    Serial.println("The word 'src:' was not found in the line.");
-  }
-
-  return NULL;
-}
 
 
 
@@ -134,7 +76,7 @@ void getMessages(){
 
 
     if(isNotification != NULL){
-      notificationTimeout = 15; // number of seconds(ish)
+      notificationTimeout = 150; // number of seconds(ish)
 
       char* srcSubstring = getSubstring(line, "src:");
       if (srcSubstring != NULL) {
@@ -256,9 +198,10 @@ void setup() {
 
 void loop() {
 
-  if(bleSerial && gotTime==true){
-    delay(500);
-  }
+//  if(bleSerial && gotTime==true){
+//    delay(500);
+//  }
+
 /*
 //  if(bleSerial && gotTime==false){
   if(_BSelect[NEW]){
@@ -339,6 +282,7 @@ void update(){
   memset(sBuff, 0x00, WIDTH*HEIGHT/8);
   
   gCol = WHITE;
+  gFont = 1;
   char tempText[18];
   //sprintf(tempText,"%d FPS", fpsCount);
   float vBat = readBattery();
@@ -382,9 +326,14 @@ void update(){
     digitalWrite(LED_RED, LOW);
   }
 
+  if(_BSelect[NEW]){
+    framecount = 0;
+    //cardY = 144;
+  }
   if(_BSelect[HELD]){
     digitalWrite(LED_GREEN, LOW);
-    displayCard();
+    displayCard(168-bounce[framecount]);
+    if(framecount<100)framecount+=2;
   }
 
   if(_BDown[NEW]){
@@ -392,14 +341,20 @@ void update(){
   }
 
   if(notificationTimeout >0){
-    displayCard();
-    notificationTimeout--;
+    if(framecount<100){
+      displayCard(168-bounce[framecount]);
+      framecount+=2;
+    }else{
+      displayCard(0);
+      notificationTimeout--;
+    }
   }
 
 
   writeScreen();
+  //framecount++;
+
 /*
-  framecount++;
   if(millis() >= lastMillis+1000){
     lastMillis = millis();
     fpsCount = framecount;
@@ -465,28 +420,30 @@ void no_connection_screen(){
   writeScreen();
 }
 
-void displayCard(){
+void displayCard(int y){
   gScale=1;
-  // clear the screen
-  memset(sBuff, 0x00, WIDTH*HEIGHT/8);
+
+  fillRect(0, y, 144, 1, BLACK);
   // banner thingy for title
-  fillRect(0, 0, 144, 40, GREY);
-  fillRect(0, 40, 144, 168-40, WHITE);
+  fillRect(0, y+1, 144, 40, GREY);
+  fillRect(0, y+40, 144, 168-40, WHITE);
 
   gCol = WHITE;
-  drawSprite(message_icon_masked[1], 55, 4);
+  drawSprite(message_icon_masked[1], 55, y+4);
   gCol = BLACK;
-  drawSprite(message_icon_masked[0], 55, 4);
+  drawSprite(message_icon_masked[0], 55, y+4);
 
   gCol = BLACK; 
   gScale = 2;
-  print(0, 50, notification[numNotifications].src );
+  gFont = 3; // bold?
+  print(0, y+40, notification[numNotifications].src );
 
   gScale = 1;
-  print(0, 70, notification[numNotifications].title );
+  gFont = 2; // regular
+  print(0, y+40+ (font03[0][1]*2), notification[numNotifications].title );
 
   gScale = 1;
-  print(0, 90, notification[numNotifications].body );
+  print(0, y+90, notification[numNotifications].body );
   
   // Title
   //print(1, 1, "Alert!");
